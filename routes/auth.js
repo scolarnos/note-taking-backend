@@ -37,14 +37,14 @@ router.post('/signup', async (req, res) => {
 
 // Login route
 router.post('/login', async (req, res) => {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required.' });
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required.' });
     }
 
     try {
-        const user = await User.findOne({ username });
+        const user = await User.findOne({ email });
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
         }
@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
         res.status(200).json({ token, message: 'Login successful.' });
     } catch (err) {
-        console.error(err);
+        console.error("Login Error", err);
         res.status(500).json({ message: 'Error during login.', error: err.message });
     }
 });
