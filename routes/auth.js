@@ -10,20 +10,18 @@ const router = Router();
 
 // Signup route
 router.post('/signup', async (req, res) => {
-    const { name, email, password } = req.body; // Accept name, email, and password
+    const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
         return res.status(400).json({ message: 'Name, email, and password are required.' });
     }
 
     try {
-        // Check if the email already exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: 'Email already registered.' });
         }
 
-        // Hash the password before saving
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = new User({ name, email, password: hashedPassword });
         await newUser.save();
@@ -59,6 +57,22 @@ router.post('/login', async (req, res) => {
     } catch (err) {
         console.error("Login Error", err);
         res.status(500).json({ message: 'Error during login.', error: err.message });
+    }
+});
+
+// ✅ NEW: Token Verification Route
+router.get('/verify', (req, res) => {
+    const token = req.header("Authorization")?.split(" ")[1]; // Extract Bearer token
+
+    if (!token) {
+        return res.status(401).json({ valid: false, message: "No token provided" });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET); // Verify token
+        res.json({ valid: true, user: decoded });
+    } catch (err) {
+        res.status(401).json({ valid: false, message: "Invalid token" });
     }
 });
 
