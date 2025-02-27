@@ -15,7 +15,12 @@ console.log('PORT:', process.env.PORT); // Should print 5000
 
 const app = express();
 app.use(json());
-app.use(cors());
+app.use(cors({
+    origin: ["http://localhost:5173", "https://your-frontend-url.com"], // Replace with deployed frontend URL
+    credentials: true, // Allows cookies and authorization headers
+    methods: "GET,POST,PUT,DELETE",
+    allowedHeaders: "Content-Type,Authorization",
+  }));
 
 // Define routes in the path
 app.use('/api/auth', authRoutes);
