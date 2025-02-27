@@ -60,20 +60,23 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// ✅ NEW: Token Verification Route
+// Token Verification Route
 router.get('/verify', (req, res) => {
-    const token = req.header("Authorization")?.split(" ")[1]; // Extract Bearer token
-
-    if (!token) {
+    const authHeader = req.headers.authorization; // Correct header extraction
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({ valid: false, message: "No token provided" });
     }
 
+    const token = authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
+
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET); // Verify token
-        res.json({ valid: true, user: decoded });
+        res.json({ valid: true, userId: decoded.id }); // Return only user ID, not full token payload
     } catch (err) {
-        res.status(401).json({ valid: false, message: "Invalid token" });
+        console.error("JWT Verification Error:", err.message);
+        res.status(401).json({ valid: false, message: "Invalid or expired token" });
     }
 });
+
 
 export default router;
