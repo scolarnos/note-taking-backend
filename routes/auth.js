@@ -1,82 +1,94 @@
-import { Router } from 'express';
+import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js'; 
-import dotenv from 'dotenv';
+import User from '../models/User.js';
 
-dotenv.config(); 
-
-const router = Router();
+const router = express.Router();
 
 // Signup route
 router.post('/signup', async (req, res) => {
-    const { name, email, password } = req.body;
+  const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
-        return res.status(400).json({ message: 'Name, email, and password are required.' });
+  try {
+    const existingUserByEmail = await User.findOne({ email });
+    if (existingUserByEmail) {
+      return res.status(400).json({ message: 'User with this email already exists' });
     }
 
-    try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Email already registered.' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ name, email, password: hashedPassword });
-        await newUser.save();
-
-        res.status(201).json({ message: 'User created successfully. Please log in.' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Error creating user.', error: err.message });
+    const existingUserByName = await User.findOne({ name });
+    if (existingUserByName) {
+      return res.status(400).json({ message: 'User with this name already exists' });
     }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ name, email, password: hashedPassword });
+
+    // Generate JWT token and save it to the user
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    user.token = token;
+    await user.save();
+
+    res.status(201).json({ token, userId: user._id }); // Return token and userId to frontend
+  } catch (error) {
+    console.error('Signup Error:', error);
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      res.status(400).json({ message: `User with this ${field} already exists` });
+    } else {
+      res.status(500).json({ message: 'Error creating user.', error: error.message });
+    }
+  }
 });
 
 // Login route
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+  const { email, password } = req.body;
 
-    if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required.' });
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    try {
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ message: 'User not found.' });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Invalid password.' });
-        }
-
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.status(200).json({ token, message: 'Login successful.' });
-    } catch (err) {
-        console.error("Login Error", err);
-        res.status(500).json({ message: 'Error during login.', error: err.message });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credentials' });
     }
+
+    // Generate new token and update in the database
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    user.token = token;
+    await user.save();
+
+    res.json({ token, userId: user._id }); // Return token and userId to frontend
+  } catch (error) {
+    console.error('Login Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
-// Token Verification Route
-router.get('/verify', (req, res) => {
-    const authHeader = req.headers.authorization; // Correct header extraction
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ valid: false, message: "No token provided" });
+// Verify token route
+router.get('/verify', async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  try {
+    // Find the user with this token in the database
+    const user = await User.findOne({ token });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid token' });
     }
 
-    const token = authHeader.split(" ")[1]; // Extract token from "Bearer <token>"
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET); // Verify token
-        res.json({ valid: true, userId: decoded.id }); // Return only user ID, not full token payload
-    } catch (err) {
-        console.error("JWT Verification Error:", err.message);
-        res.status(401).json({ valid: false, message: "Invalid or expired token" });
-    }
+    // Verify the token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    res.json({ valid: true, userId: decoded.id });
+  } catch (error) {
+    console.error('Verify Error:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
 });
-
 
 export default router;
