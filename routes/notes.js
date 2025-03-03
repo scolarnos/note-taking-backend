@@ -1,99 +1,90 @@
-import { Router } from 'express';
-import pkg from 'jsonwebtoken';
+import express from 'express';
+import jwt from 'jsonwebtoken';
 import Note from '../models/Note.js';
+import User from '../models/User.js';
 
-const { verify } = pkg;
-const router = Router();
+const router = express.Router();
 
-// Middleware to verify JWT
-const verifyToken = (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1]; // Expect "Bearer <token>"
+// Middleware to authenticate using userId
+const authenticate = async (req, res, next) => {
+  const userId = req.headers['user-id'];
 
-    if (!token) {
-        return res.status(401).json({ message: 'No token provided.' });
+  if (!userId) {
+    return res.status(401).json({ message: 'No user ID provided' });
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user || !user.token) {
+      return res.status(401).json({ message: 'Invalid user ID or token' });
     }
 
-    try {
-        const decoded = verify(token, process.env.JWT_SECRET);
-        req.userId = decoded.id;
-        next();
-    } catch (err) {
-        return res.status(401).json({ message: 'Invalid or expired token.' });
-    }
+    // Verify the token stored in the database
+    jwt.verify(user.token, process.env.JWT_SECRET);
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Authentication Error:', error);
+    res.status(401).json({ message: 'Invalid token' });
+  }
 };
 
-// Create Note
-router.post('/', verifyToken, async (req, res) => {
-    const { content } = req.body;
-
-    if (!content) {
-        return res.status(400).json({ message: 'Content is required.' });
-    }
-
-    try {
-        const newNote = new Note({
-            userId: req.userId,
-            content,
-        });
-        await newNote.save();
-
-        res.status(201).json(newNote);
-    } catch (err) {
-        res.status(500).json({ message: 'Error creating note.', error: err.message });
-    }
+// Get all notes for the authenticated user
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const notes = await Note.find({ userId: req.user._id });
+    res.json({ notes });
+  } catch (error) {
+    console.error('Error fetching notes:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
-// Get All Notes
-router.get('/', verifyToken, async (req, res) => {
-    try {
-        const notes = await Note.find({ userId: req.userId }); // FIXED
-        res.status(200).json(notes);
-    } catch (err) {
-        res.status(500).json({ message: 'Error fetching notes.', error: err.message });
-    }
+// Create a new note
+router.post('/', authenticate, async (req, res) => {
+  const { title, content } = req.body;
+
+  try {
+    const note = new Note({ userId: req.user._id, title, content });
+    await note.save();
+    res.status(201).json({ note });
+  } catch (error) {
+    console.error('Error creating note:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
-// Update Note
-router.put('/:id', verifyToken, async (req, res) => {
-    const { id } = req.params;
-    const { content } = req.body;
+// Update a note (e.g., for pinning)
+router.put('/:id', authenticate, async (req, res) => {
+  const { pinned } = req.body;
 
-    if (!content) {
-        return res.status(400).json({ message: 'Content is required.' });
+  try {
+    const note = await Note.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!note) {
+      return res.status(404).json({ message: 'Note not found' });
     }
 
-    try {
-        const updatedNote = await Note.findByIdAndUpdate( // FIXED
-            id,
-            { content },
-            { new: true }
-        );
-
-        if (!updatedNote) {
-            return res.status(404).json({ message: 'Note not found.' });
-        }
-
-        res.status(200).json(updatedNote);
-    } catch (err) {
-        res.status(500).json({ message: 'Error updating note.', error: err.message });
-    }
+    note.pinned = pinned;
+    await note.save();
+    res.json({ note });
+  } catch (error) {
+    console.error('Error updating note:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
-// Delete Note
-router.delete('/:id', verifyToken, async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        const deletedNote = await Note.findByIdAndDelete(id); // FIXED
-
-        if (!deletedNote) {
-            return res.status(404).json({ message: 'Note not found.' });
-        }
-
-        res.status(200).json({ message: 'Note deleted successfully.' });
-    } catch (err) {
-        res.status(500).json({ message: 'Error deleting note.', error: err.message });
+// Delete a note
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const note = await Note.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!note) {
+      return res.status(404).json({ message: 'Note not found' });
     }
+    res.json({ message: 'Note deleted' });
+  } catch (error) {
+    console.error('Error deleting note:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 export default router;
