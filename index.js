@@ -18,17 +18,19 @@ const app = express();
 // Define allowed origins
 const allowedOrigins = [
   'http://localhost:5173',                          // Local development
-  'https://note-taking-nqjg2e5ce-scolarnos-projects.vercel.app' // Deployed frontend
+  'https://note-taking-nqjg2e5ce-scolarnos-projects.vercel.app', // Old frontend
+  'https://note-taking-o7hcxc9vl-scolarnos-projects.vercel.app'  // New frontend
 ];
 
 // Middleware
 app.use(json());
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like Postman) or if origin is in allowedOrigins
     if (!origin || allowedOrigins.includes(origin)) {
+      console.log('CORS allowed origin:', origin); // Log allowed origins
       callback(null, true);
     } else {
+      console.log('CORS rejected origin:', origin); // Log rejected origins
       callback(new Error('Not allowed by CORS'));
     }
   },
