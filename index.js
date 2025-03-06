@@ -15,13 +15,26 @@ console.log('PORT:', process.env.PORT);
 
 const app = express();
 
+// Define allowed origins
+const allowedOrigins = [
+  'http://localhost:5173',                          // Local development
+  'https://note-taking-nqjg2e5ce-scolarnos-projects.vercel.app' // Deployed frontend
+];
+
 // Middleware
 app.use(json());
 app.use(cors({
-  origin: ["http://localhost:5173"],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like Postman) or if origin is in allowedOrigins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: "GET,POST,PUT,DELETE",
-  allowedHeaders: "Content-Type,Authorization,User-ID", // Add User-ID to allowed headers
+  methods: 'GET,POST,PUT,DELETE',
+  allowedHeaders: 'Content-Type,Authorization,User-ID',
 }));
 
 // API routes
