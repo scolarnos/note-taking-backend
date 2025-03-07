@@ -19,7 +19,8 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',                          // Local development
   'https://note-taking-nqjg2e5ce-scolarnos-projects.vercel.app', // Old frontend
-  'https://note-taking-o7hcxc9vl-scolarnos-projects.vercel.app'  // New frontend
+  'https://note-taking-o7hcxc9vl-scolarnos-projects.vercel.app', // New frontend
+  'https://note-taking-app-git-main-scolarnos-projects.vercel.app' 
 ];
 
 // Middleware
